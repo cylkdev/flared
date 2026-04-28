@@ -2,12 +2,16 @@ defmodule Flared.Zones do
   @moduledoc """
   Cloudflare Zones helpers.
 
-  Used by `Flared.Provisioner` to map a hostname (e.g. `chat.example.com`)
-  to the correct zone id in the configured account.
+  Used by `Flared.Provisioner.Remote` and `Flared.Provisioner.Local`
+  to map a hostname (e.g. `chat.example.com`) to the correct zone id
+  in the configured account.
 
   Zone resolution uses a "longest suffix match" strategy:
 
   - `a.sub.example.com` matches `sub.example.com` over `example.com`
+
+  Every public function that talks to Cloudflare accepts a final `opts`
+  keyword list, forwarded to `Flared.Client` (notably `:token`).
   """
 
   alias Flared.Client
@@ -17,9 +21,9 @@ defmodule Flared.Zones do
   @doc """
   Lists active zones for the account (paginates).
   """
-  @spec list_zones(Client.t(), String.t()) :: {:ok, list(map())} | {:error, term()}
-  def list_zones(%Client{} = client, account_id) when is_binary(account_id) do
-    list_zones_page(client, account_id, 1, [])
+  @spec list_zones(String.t(), keyword()) :: {:ok, list(map())} | {:error, term()}
+  def list_zones(account_id, opts \\ []) when is_binary(account_id) and is_list(opts) do
+    list_zones_page(account_id, 1, [], opts)
   end
 
   @doc """
@@ -47,7 +51,7 @@ defmodule Flared.Zones do
     end
   end
 
-  defp list_zones_page(%Client{} = client, account_id, page, acc) do
+  defp list_zones_page(account_id, page, acc, opts) do
     params = %{
       "account.id" => account_id,
       "status" => "active",
@@ -55,7 +59,7 @@ defmodule Flared.Zones do
       "page" => page
     }
 
-    case Client.request_envelope(client, :get, "/zones", params: params) do
+    case Client.request_envelope(:get, "/zones", Keyword.put(opts, :params, params)) do
       {:ok, %{result: zones, result_info: info}} when is_list(zones) ->
         total_pages =
           case info do
@@ -65,7 +69,7 @@ defmodule Flared.Zones do
           end
 
         if is_integer(total_pages) and page < total_pages do
-          list_zones_page(client, account_id, page + 1, Enum.reverse(zones, acc))
+          list_zones_page(account_id, page + 1, Enum.reverse(zones, acc), opts)
         else
           {:ok, Enum.reverse(acc, zones)}
         end

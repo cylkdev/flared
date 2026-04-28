@@ -2,10 +2,15 @@ defmodule Flared.DNS do
   @moduledoc """
   Cloudflare DNS operations used for tunnel provisioning.
 
-  This module is used by `Flared.Provisioner` to upsert DNS records for
-  the public hostnames routed into a tunnel.
+  This module is used by `Flared.Provisioner.Remote` and
+  `Flared.Provisioner.Local` to upsert DNS records for the public
+  hostnames routed into a tunnel.
 
   DNS records are always created/updated with `proxied: true`.
+
+  Every public function accepts a final `opts` keyword list, forwarded to
+  `Flared.Client` (notably `:token`). Function-specific options (e.g.
+  `:ttl`) are documented on each function.
   """
 
   alias Flared.Client
@@ -14,24 +19,30 @@ defmodule Flared.DNS do
   Ensures a CNAME record exists for `hostname` pointing to the tunnel target.
 
   Returns `:noop` if an existing record already matches the desired content.
+
+  ## Options
+
+  - `:ttl` (default `1` / "auto")
+  - plus any option accepted by `Flared.Client` (notably `:token`)
   """
-  @spec ensure_cname(Client.t(), String.t(), String.t(), String.t(), keyword()) ::
+  @spec upsert_cname(String.t(), String.t(), String.t(), keyword()) ::
           {:ok, %{status: :created | :updated | :noop, record_id: String.t() | nil}}
           | {:error, term()}
-  def ensure_cname(%Client{} = client, zone_id, hostname, tunnel_id, opts \\ [])
+  def upsert_cname(zone_id, hostname, tunnel_id, opts \\ [])
       when is_binary(zone_id) and is_binary(hostname) and is_binary(tunnel_id) and is_list(opts) do
     desired = desired_record(hostname, tunnel_id, opts)
+    client_opts = Keyword.drop(opts, [:ttl])
 
-    with {:ok, existing} <- get_cname_record(client, zone_id, hostname) do
+    with {:ok, existing} <- get_cname_record(zone_id, hostname, client_opts) do
       case existing do
         nil ->
-          create_record(client, zone_id, desired)
+          create_record(zone_id, desired, client_opts)
 
         record ->
           if record_matches?(record, desired) do
             {:ok, %{status: :noop, record_id: record["id"]}}
           else
-            update_record(client, zone_id, record, desired)
+            update_record(zone_id, record, desired, client_opts)
           end
       end
     end
@@ -42,19 +53,20 @@ defmodule Flared.DNS do
 
   Returns `{:ok, nil}` when missing.
   """
-  @spec find_cname(Client.t(), String.t(), String.t()) :: {:ok, map() | nil} | {:error, term()}
-  def find_cname(%Client{} = client, zone_id, hostname)
-      when is_binary(zone_id) and is_binary(hostname) do
-    get_cname_record(client, zone_id, hostname)
+  @spec find_cname(String.t(), String.t(), keyword()) ::
+          {:ok, map() | nil} | {:error, term()}
+  def find_cname(zone_id, hostname, opts \\ [])
+      when is_binary(zone_id) and is_binary(hostname) and is_list(opts) do
+    get_cname_record(zone_id, hostname, opts)
   end
 
   @doc """
   Deletes a DNS record by id.
   """
-  @spec delete_record(Client.t(), String.t(), String.t()) :: {:ok, term()} | {:error, term()}
-  def delete_record(%Client{} = client, zone_id, record_id)
-      when is_binary(zone_id) and is_binary(record_id) do
-    Client.delete(client, "/zones/#{zone_id}/dns_records/#{record_id}")
+  @spec delete_record(String.t(), String.t(), keyword()) :: {:ok, term()} | {:error, term()}
+  def delete_record(zone_id, record_id, opts \\ [])
+      when is_binary(zone_id) and is_binary(record_id) and is_list(opts) do
+    Client.delete("/zones/#{zone_id}/dns_records/#{record_id}", opts)
   end
 
   @doc """
@@ -78,10 +90,10 @@ defmodule Flared.DNS do
     }
   end
 
-  defp get_cname_record(%Client{} = client, zone_id, hostname) do
+  defp get_cname_record(zone_id, hostname, opts) do
     params = %{"type" => "CNAME", "name" => hostname}
 
-    case Client.get(client, "/zones/#{zone_id}/dns_records", params) do
+    case Client.get("/zones/#{zone_id}/dns_records", Keyword.put(opts, :params, params)) do
       {:ok, records} when is_list(records) ->
         pick_single_record(records)
 
@@ -102,19 +114,19 @@ defmodule Flared.DNS do
   defp pick_single_record(records),
     do: {:error, {:ambiguous_dns_records, Enum.map(records, & &1["id"])}}
 
-  defp create_record(%Client{} = client, zone_id, desired) do
-    case Client.post(client, "/zones/#{zone_id}/dns_records", desired) do
+  defp create_record(zone_id, desired, opts) do
+    case Client.post("/zones/#{zone_id}/dns_records", desired, opts) do
       {:ok, %{"id" => id}} when is_binary(id) -> {:ok, %{status: :created, record_id: id}}
       {:ok, _} -> {:ok, %{status: :created, record_id: nil}}
       {:error, _} = error -> error
     end
   end
 
-  defp update_record(%Client{} = client, zone_id, record, desired) do
+  defp update_record(zone_id, record, desired, opts) do
     record_id = record["id"]
 
     if is_binary(record_id) do
-      case Client.patch(client, "/zones/#{zone_id}/dns_records/#{record_id}", desired) do
+      case Client.patch("/zones/#{zone_id}/dns_records/#{record_id}", desired, opts) do
         {:ok, _} -> {:ok, %{status: :updated, record_id: record_id}}
         {:error, _} = error -> error
       end

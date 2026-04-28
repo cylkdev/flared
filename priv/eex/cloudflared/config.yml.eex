@@ -1,7 +1,8 @@
 tunnel: <%= assigns[:tunnel_id] %>
-credentials-file: <%= assigns[:credentials_path] %>/<%= assigns[:tunnel_id] %>.json
 
 ingress:
-  - hostname: <%= assigns[:hostname] %>
-    service: http://localhost:4000
+<%= for route <- assigns[:routes] do %>
+  - hostname: <%= route.hostname %>
+    service: <%= route.service %>
+<% end %>
   - service: http_status:404

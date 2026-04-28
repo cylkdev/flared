@@ -2,14 +2,14 @@ defmodule Flared do
   @moduledoc """
   Flared provisions Cloudflare tunnels from Elixir.
 
-  This module is a docs hub. The public API lives in `Flared.TunnelCLI`.
+  This module is a docs hub. The public API lives in `Flared.MixTask`.
 
   ## Two ways to run a tunnel
 
     - **Remote** — ingress rules are pushed to the Cloudflare API;
       `cloudflared` runs with `--token <TOKEN>`. Stateless on disk.
     - **Local** — ingress rules are written to a local `config.yml`;
-      credentials are written to `<config_dir>/<UUID>.json`;
+      credentials are written to `<cloudflared_dir>/<UUID>.json`;
       `cloudflared` runs with `--config <path> tunnel run`.
 
   ## Getting Started
@@ -36,28 +36,28 @@ defmodule Flared do
         %{hostname: "api.example.com",  service: "http://localhost:4001"}
       ]
 
-      Flared.TunnelCLI.run_remote("site-a", routes)
+      Flared.MixTask.run_remote("site-a", routes)
 
   Or, to run with a local `config.yml`:
 
-      Flared.TunnelCLI.run_local("site-a", routes, config_dir: ".cloudflared/site-a")
+      Flared.MixTask.run_local("site-a", routes, cloudflared_dir: ".cloudflared/site-a")
 
   Both block until `cloudflared` exits, then deprovision the
   Cloudflare-side resources before returning.
 
   ### 3. Inspect a tunnel
 
-      Flared.TunnelCLI.status("site-a")
+      Flared.MixTask.status("site-a")
       #=> {:ok, %{name: "site-a", exists: true, tunnel_id: "..."}}
 
   The tunnel `name` is a required first positional argument on every
-  `Flared.TunnelCLI` function.
+  `Flared.MixTask` function.
 
   ## What lives where
 
   | Module                      | Purpose                                          |
   | --------------------------- | ------------------------------------------------ |
-  | `Flared.TunnelCLI`             | Stateless high-level tunnel API.                 |
+  | `Flared.MixTask`             | Stateless high-level tunnel API.                 |
   | `Flared.Provisioner.Remote` | API-managed (token mode) provisioning.           |
   | `Flared.Provisioner.Local`  | Local-config provisioning + on-disk artifacts.   |
   | `Flared.Credentials`        | Builds the `<UUID>.json` credentials file.       |

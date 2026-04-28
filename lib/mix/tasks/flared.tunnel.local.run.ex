@@ -3,12 +3,12 @@ defmodule Mix.Tasks.Flared.Tunnel.Local.Run do
 
   @moduledoc """
   Runs a local-mode Cloudflare tunnel by calling
-  `Flared.TunnelCLI.run_local/2` and blocks the BEAM until `cloudflared`
+  `Flared.MixTask.run_local/2` and blocks the BEAM until `cloudflared`
   exits.
 
   Creates resources via `Flared.Provisioner.Local.provision/3`,
   which writes a local `config.yml` and `<UUID>.json` credentials file
-  under `--config-dir`, then runs `cloudflared --config <path> tunnel run`.
+  under `--cloudflared-dir`, then runs `cloudflared --config <path> tunnel run`.
   When `cloudflared` exits (or the BEAM is interrupted), the matching
   destroy is invoked to clean up Cloudflare-side resources and the
   local files.
@@ -22,7 +22,7 @@ defmodule Mix.Tasks.Flared.Tunnel.Local.Run do
   ```bash
   mix flared.tunnel.local.run \\
     --name test \\
-    --config-dir .cloudflared/test \\
+    --cloudflared-dir .cloudflared/test \\
     --route chat.example.com=http://localhost:4000
   ```
 
@@ -33,7 +33,7 @@ defmodule Mix.Tasks.Flared.Tunnel.Local.Run do
 
   - `--name <name>`: Cloudflare tunnel name (required)
   - `--account-id <id>`: Cloudflare account id (overrides app config)
-  - `--config-dir <path>`: directory for `config.yml` and credentials
+  - `--cloudflared-dir <path>`: directory for `config.yml` and credentials
     (defaults to `.cloudflared/<name>`)
   - `--route <hostname>=<service>[,ttl=<n>][,zone_id=<id>]`: repeatable, required
   - `--concurrency <n>`: DNS upsert concurrency (default: schedulers_online)
@@ -44,12 +44,12 @@ defmodule Mix.Tasks.Flared.Tunnel.Local.Run do
   use Mix.Task
 
   alias Flared.Provisioner.Common
-  alias Flared.TunnelCLI
+  alias Flared.MixTask
 
   @switches [
     name: :string,
     account_id: :string,
-    config_dir: :string,
+    cloudflared_dir: :string,
     route: :keep,
     concurrency: :integer,
     dry_run: :boolean,
@@ -101,7 +101,7 @@ defmodule Mix.Tasks.Flared.Tunnel.Local.Run do
     Mix.shell().info("Tunnel #{inspect(name)} starting…")
     Mix.shell().info("Press Ctrl-C twice to stop.")
 
-    case TunnelCLI.run_local(name, parsed_routes, opts) do
+    case MixTask.run_local(name, parsed_routes, opts) do
       :ok ->
         :ok
 
@@ -147,7 +147,7 @@ defmodule Mix.Tasks.Flared.Tunnel.Local.Run do
   defp build_open_opts(parsed) do
     []
     |> maybe_put(:account_id, parsed[:account_id])
-    |> maybe_put(:config_dir, parsed[:config_dir])
+    |> maybe_put(:cloudflared_dir, parsed[:cloudflared_dir])
     |> maybe_put(:concurrency, parsed[:concurrency])
     |> maybe_put(:dry_run?, parsed[:dry_run])
     |> maybe_put(:timeout, parsed[:timeout])

@@ -1,5 +1,7 @@
 tunnel: <%= assigns[:tunnel_id] %>
-
+<%= if assigns[:credentials_file] do %>
+credentials-file: <%= assigns[:credentials_file] %>
+<% end %>
 ingress:
 <%= for route <- assigns[:routes] do %>
   - hostname: <%= route.hostname %>

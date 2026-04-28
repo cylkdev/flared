@@ -15,7 +15,7 @@ defmodule Flared.Provisioner.Local do
   Secrets and defaults are read from `Flared.Config` (application env).
   Required: `:api_token`, `:account_id`. DNS records are always
   created/updated with `proxied: true`. The directory the local files
-  are written to is resolved by `Flared.Config.config_dir/1`.
+  are written to is resolved by `Flared.Config.cloudflared_dir/0`.
 
   ## Route format
 
@@ -71,7 +71,7 @@ defmodule Flared.Provisioner.Local do
   `config.yml` so that `cloudflared --config <path> tunnel run` can
   read the ingress configuration directly.
 
-  The config directory is resolved via `Flared.Config.config_dir/1` —
+  The config directory is resolved via `Flared.Config.cloudflared_dir/0` —
   it is created if it does not exist.
 
   When `dry_run?: true`, no Cloudflare mutation endpoints are called
@@ -82,7 +82,7 @@ defmodule Flared.Provisioner.Local do
 
       - `:account_id` - Cloudflare account ID (overrides env/config)
       - `:concurrency` - DNS upsert concurrency (default: `System.schedulers_online/0`)
-      - `:config_dir` - directory for local `cloudflared` files (resolved via `Flared.Config.config_dir/1`)
+      - `:cloudflared_dir` - directory for local `cloudflared` files (resolved via `Flared.Config.cloudflared_dir/0`)
       - `:dry_run?` - if true, do not mutate
       - `:token` - Cloudflare API token (overrides app config)
   """
@@ -93,7 +93,7 @@ defmodule Flared.Provisioner.Local do
     dry_run? = Keyword.get(opts, :dry_run?, false)
     concurrency = Keyword.get(opts, :concurrency, System.schedulers_online())
 
-    config_dir = opts[:config_dir] || Config.config_dir()
+    cloudflared_dir = opts[:cloudflared_dir] || Config.cloudflared_dir()
 
     with {:ok, account_id} <- fetch_account_id(opts),
          :ok <- validate_routes(routes),
@@ -103,7 +103,7 @@ defmodule Flared.Provisioner.Local do
            Common.ensure_dns(zones, tunnel, routes, concurrency, dry_run?, opts),
          {:ok, token} <- Common.fetch_token(account_id, tunnel, dry_run?, opts),
          {:ok, config_path, credentials_path} <-
-           write_local_files(config_dir, tunnel, tunnel_name, routes, token, dry_run?) do
+           write_local_files(cloudflared_dir, tunnel, tunnel_name, routes, token, dry_run?) do
       {:ok,
        %{
          tunnel_id: tunnel.id,
@@ -126,13 +126,13 @@ defmodule Flared.Provisioner.Local do
   written by `provision/3`. File outcomes are returned in the
   `:files` list with per-file `:status`.
 
-  The config directory is resolved via `Flared.Config.config_dir/1`.
+  The config directory is resolved via `Flared.Config.cloudflared_dir/0`.
 
   ## Options
 
       - `:account_id` - Cloudflare account ID (overrides env/config)
       - `:concurrency` - DNS delete concurrency (default: `System.schedulers_online/0`)
-      - `:config_dir` - directory containing the local `cloudflared` files (resolved via `Flared.Config.config_dir/1`)
+      - `:cloudflared_dir` - directory containing the local `cloudflared` files (resolved via `Flared.Config.cloudflared_dir/0`)
       - `:dry_run?` - if true, do not mutate
       - `:delete_dns?` - default true; set false to keep DNS
       - `:delete_tunnel?` - default true; set false to keep tunnel
@@ -149,7 +149,7 @@ defmodule Flared.Provisioner.Local do
     delete_files? = Keyword.get(opts, :delete_files?, true)
     concurrency = Keyword.get(opts, :concurrency, System.schedulers_online())
 
-    config_dir = opts[:config_dir] || Config.config_dir()
+    cloudflared_dir = opts[:cloudflared_dir] || Config.cloudflared_dir()
 
     with {:ok, account_id} <- fetch_account_id(opts),
          :ok <- validate_routes(routes),
@@ -167,7 +167,7 @@ defmodule Flared.Provisioner.Local do
            ),
          {:ok, tunnel_result} <-
            Common.maybe_delete_tunnel(account_id, tunnel, dry_run?, delete_tunnel?, opts) do
-      file_results = maybe_delete_local_files(config_dir, tunnel, dry_run?, delete_files?)
+      file_results = maybe_delete_local_files(cloudflared_dir, tunnel, dry_run?, delete_files?)
 
       {:ok,
        %{
@@ -240,27 +240,30 @@ defmodule Flared.Provisioner.Local do
   defp validate_ttl(%{ttl: ttl}), do: {:error, {:invalid_ttl, ttl}}
   defp validate_ttl(_), do: :ok
 
-  defp write_local_files(config_dir, tunnel, _tunnel_name, _routes, _token, true = _dry_run?) do
+  defp write_local_files(cloudflared_dir, tunnel, _tunnel_name, _routes, _token, true = _dry_run?) do
     tunnel_id = tunnel.id
+    expanded_dir = Path.expand(cloudflared_dir)
 
-    config_path = Path.join(config_dir, "config.yml")
+    config_path = Path.join(expanded_dir, "config.yml")
 
     credentials_path =
       if is_binary(tunnel_id) and tunnel_id !== "" do
-        Credentials.path(config_dir, tunnel_id)
+        Credentials.path(tunnel_id, cloudflared_dir: expanded_dir)
       end
 
     {:ok, config_path, credentials_path}
   end
 
-  defp write_local_files(config_dir, tunnel, tunnel_name, routes, token, false = _dry_run?) do
+  defp write_local_files(cloudflared_dir, tunnel, tunnel_name, routes, token, false = _dry_run?) do
     tunnel_id = tunnel.id
+    expanded_dir = Path.expand(cloudflared_dir)
 
     with :ok <- ensure_local_inputs(tunnel_id, token),
+         credentials_path = Credentials.path(tunnel_id, cloudflared_dir: expanded_dir),
          {:ok, config_path} <-
-           ConfigYML.generate(config_dir, routes, tunnel_id),
-         {:ok, credentials_path} <-
-           Credentials.write(config_dir, tunnel_id, tunnel_name, token) do
+           ConfigYML.generate_config_yml(expanded_dir, routes, tunnel_id, credentials_path),
+         {:ok, ^credentials_path} <-
+           Credentials.write(tunnel_id, tunnel_name, token, cloudflared_dir: expanded_dir) do
       {:ok, config_path, credentials_path}
     end
   end
@@ -273,20 +276,21 @@ defmodule Flared.Provisioner.Local do
     end
   end
 
-  defp maybe_delete_local_files(_config_dir, _tunnel, _dry_run?, false = _delete_files?), do: []
+  defp maybe_delete_local_files(_cloudflared_dir, _tunnel, _dry_run?, false = _delete_files?),
+    do: []
 
-  defp maybe_delete_local_files(config_dir, tunnel, dry_run?, true = _delete_files?) do
+  defp maybe_delete_local_files(cloudflared_dir, tunnel, dry_run?, true = _delete_files?) do
     paths =
-      [Path.join(config_dir, "config.yml")]
-      |> maybe_append_credentials_path(config_dir, tunnel.id)
+      [Path.join(cloudflared_dir, "config.yml")]
+      |> maybe_append_credentials_path(cloudflared_dir, tunnel.id)
 
     Enum.map(paths, fn path -> delete_file(path, dry_run?) end)
   end
 
-  defp maybe_append_credentials_path(paths, _config_dir, nil), do: paths
+  defp maybe_append_credentials_path(paths, _cloudflared_dir, nil), do: paths
 
-  defp maybe_append_credentials_path(paths, config_dir, tunnel_id) when is_binary(tunnel_id),
-    do: paths ++ [Credentials.path(config_dir, tunnel_id)]
+  defp maybe_append_credentials_path(paths, cloudflared_dir, tunnel_id) when is_binary(tunnel_id),
+    do: paths ++ [Credentials.path(tunnel_id, cloudflared_dir: cloudflared_dir)]
 
   defp delete_file(path, true = _dry_run?) do
     if File.exists?(path) do

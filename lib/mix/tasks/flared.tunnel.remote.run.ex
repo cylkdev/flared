@@ -3,7 +3,7 @@ defmodule Mix.Tasks.Flared.Tunnel.Remote.Run do
 
   @moduledoc """
   Runs a remote-mode Cloudflare tunnel by calling
-  `Flared.TunnelCLI.run_remote/2` and blocks the BEAM until `cloudflared`
+  `Flared.MixTask.run_remote/2` and blocks the BEAM until `cloudflared`
   exits.
 
   Creates resources via `Flared.Provisioner.Remote.provision/3`,
@@ -41,7 +41,7 @@ defmodule Mix.Tasks.Flared.Tunnel.Remote.Run do
   use Mix.Task
 
   alias Flared.Provisioner.Common
-  alias Flared.TunnelCLI
+  alias Flared.MixTask
 
   @switches [
     name: :string,
@@ -97,7 +97,7 @@ defmodule Mix.Tasks.Flared.Tunnel.Remote.Run do
     Mix.shell().info("Tunnel #{inspect(name)} starting…")
     Mix.shell().info("Press Ctrl-C twice to stop.")
 
-    case TunnelCLI.run_remote(name, parsed_routes, opts) do
+    case MixTask.run_remote(name, parsed_routes, opts) do
       :ok ->
         :ok
 

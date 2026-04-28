@@ -8,7 +8,11 @@ defmodule Flared.Template do
   """
 
   @type route :: %{required(:hostname) => String.t(), required(:service) => String.t()}
-  @type assigns :: %{required(:tunnel_id) => String.t(), required(:routes) => [route()]}
+  @type assigns :: %{
+          required(:tunnel_id) => String.t(),
+          required(:routes) => [route()],
+          optional(:credentials_file) => String.t()
+        }
 
   @type write_opt ::
           {:filename, Path.t()}
@@ -85,9 +89,11 @@ defmodule Flared.Template do
     end
   end
 
-  defp validate_assigns(%{tunnel_id: tunnel_id, routes: routes})
+  defp validate_assigns(%{tunnel_id: tunnel_id, routes: routes} = assigns)
        when is_binary(tunnel_id) and tunnel_id != "" and is_list(routes) do
-    validate_routes(routes)
+    with :ok <- validate_credentials_file(assigns) do
+      validate_routes(routes)
+    end
   end
 
   defp validate_assigns(assigns) do
@@ -97,6 +103,14 @@ defmodule Flared.Template do
       end)
 
     {:error, {:missing_assigns, missing}}
+  end
+
+  defp validate_credentials_file(assigns) do
+    case Map.get(assigns, :credentials_file) do
+      nil -> :ok
+      value when is_binary(value) and value !== "" -> :ok
+      other -> {:error, {:invalid_credentials_file, other}}
+    end
   end
 
   defp validate_routes(routes) do

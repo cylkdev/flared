@@ -24,7 +24,7 @@ defmodule Flared.Config do
   """
 
   @app :flared
-  @default_config_dir ".cloudflared"
+  @default_cloudflared_dir ".cloudflared"
 
   @spec api_token() :: String.t() | nil
   def api_token do
@@ -44,12 +44,12 @@ defmodule Flared.Config do
   @doc """
   Resolves the directory used for local `cloudflared` files.
 
-  Falls back to the default `#{@default_config_dir}` when no value is
-  configured.
+  Falls back to the default `#{@default_cloudflared_dir}` when no value
+  is configured.
   """
-  @spec config_dir() :: Path.t()
-  def config_dir do
-    @app |> Application.get_env(:config_dir) |> lookup(@default_config_dir)
+  @spec cloudflared_dir() :: Path.t()
+  def cloudflared_dir do
+    @app |> Application.get_env(:cloudflared_dir) |> lookup(@default_cloudflared_dir)
   end
 
   @doc """

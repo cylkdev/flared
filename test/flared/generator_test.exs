@@ -13,7 +13,7 @@ defmodule Flared.ConfigYMLTest do
       %{hostname: "api.example.com", service: "http://localhost:4001"}
     ]
 
-    {:ok, contents} = ConfigYML.render(routes, "tunnel-id")
+    {:ok, contents} = ConfigYML.render_config_yml(routes, "tunnel-id", nil)
     text = IO.iodata_to_binary(contents)
 
     assert text =~ "hostname: chat.example.com"
@@ -23,13 +23,43 @@ defmodule Flared.ConfigYMLTest do
     assert text =~ "service: http_status:404"
   end
 
-  test "generate/4 writes a config file from routes" do
+  test "generate/5 writes a config file from routes" do
     routes = [%{hostname: "chat.example.com", service: "http://localhost:4000"}]
     dest_dir = tmp_dir()
 
-    {:ok, path} = ConfigYML.generate(dest_dir, routes, "tunnel-id")
+    {:ok, path} = ConfigYML.generate_config_yml(dest_dir, routes, "tunnel-id", nil)
 
     assert File.exists?(path)
     assert File.read!(path) =~ "hostname: chat.example.com"
+  end
+
+  test "render/4 emits credentials-file when credentials_file is given" do
+    routes = [%{hostname: "chat.example.com", service: "http://localhost:4000"}]
+
+    {:ok, contents} =
+      ConfigYML.render_config_yml(routes, "tunnel-id", "/abs/dir/tunnel-id.json")
+
+    text = IO.iodata_to_binary(contents)
+
+    assert text =~ "credentials-file: /abs/dir/tunnel-id.json"
+  end
+
+  test "render/4 omits credentials-file when credentials_file is nil" do
+    routes = [%{hostname: "chat.example.com", service: "http://localhost:4000"}]
+
+    {:ok, contents} = ConfigYML.render_config_yml(routes, "tunnel-id", nil)
+    text = IO.iodata_to_binary(contents)
+
+    refute text =~ "credentials-file:"
+  end
+
+  test "generate/5 writes credentials-file into the file when given" do
+    routes = [%{hostname: "chat.example.com", service: "http://localhost:4000"}]
+    dest_dir = tmp_dir()
+
+    {:ok, path} =
+      ConfigYML.generate_config_yml(dest_dir, routes, "tunnel-id", "/abs/dir/tunnel-id.json")
+
+    assert File.read!(path) =~ "credentials-file: /abs/dir/tunnel-id.json"
   end
 end

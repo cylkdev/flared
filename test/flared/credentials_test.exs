@@ -1,5 +1,5 @@
 defmodule Flared.CredentialsTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
   alias Flared.Credentials
 
@@ -43,11 +43,12 @@ defmodule Flared.CredentialsTest do
   end
 
   describe "write/4" do
-    test "writes <config_dir>/<tunnel_id>.json with the expected content" do
+    test "writes <cloudflared_dir>/<tunnel_id>.json with the expected content" do
       dir = Path.join(System.tmp_dir!(), "flared-creds-#{System.unique_integer([:positive])}")
       on_exit(fn -> File.rm_rf!(dir) end)
 
-      {:ok, path} = Credentials.write(dir, "tunnel-uuid-abc", "my-tunnel", @valid_token)
+      {:ok, path} =
+        Credentials.write("tunnel-uuid-abc", "my-tunnel", @valid_token, cloudflared_dir: dir)
 
       assert path === Path.join(dir, "tunnel-uuid-abc.json")
       assert File.exists?(path)
@@ -61,25 +62,47 @@ defmodule Flared.CredentialsTest do
               }} = path |> File.read!() |> Jason.decode()
     end
 
-    test "creates the config_dir if it does not exist" do
+    test "creates the cloudflared_dir if it does not exist" do
       base = System.tmp_dir!()
       dir = Path.join([base, "flared-creds-#{System.unique_integer([:positive])}", "nested"])
       on_exit(fn -> File.rm_rf!(dir) end)
 
       refute File.exists?(dir)
-      assert {:ok, _path} = Credentials.write(dir, "uuid", "name", @valid_token)
+      assert {:ok, _path} = Credentials.write("uuid", "name", @valid_token, cloudflared_dir: dir)
       assert File.dir?(dir)
     end
 
     test "propagates token decode errors" do
       assert {:error, {:invalid_token, _}} =
-               Credentials.write(System.tmp_dir!(), "uuid", "name", "!!!not-base64!!!")
+               Credentials.write("uuid", "name", "!!!not-base64!!!",
+                 cloudflared_dir: System.tmp_dir!()
+               )
+    end
+
+    test "falls back to Flared.Config.cloudflared_dir/0 when :cloudflared_dir option is absent" do
+      base = System.tmp_dir!()
+      dir = Path.join(base, "flared-creds-cfg-#{System.unique_integer([:positive])}")
+      on_exit(fn -> File.rm_rf!(dir) end)
+
+      Application.put_env(:flared, :cloudflared_dir, dir)
+      on_exit(fn -> Application.delete_env(:flared, :cloudflared_dir) end)
+
+      assert {:ok, path} = Credentials.write("cfg-uuid", "n", @valid_token)
+
+      assert path === Path.join(dir, "cfg-uuid.json")
     end
   end
 
   describe "path/2" do
     test "returns the path without touching the filesystem" do
-      assert "/tmp/dir/uuid.json" === Credentials.path("/tmp/dir", "uuid")
+      assert "/tmp/dir/uuid.json" === Credentials.path("uuid", cloudflared_dir: "/tmp/dir")
+    end
+
+    test "falls back to Flared.Config.cloudflared_dir/0 when :cloudflared_dir option is absent" do
+      Application.put_env(:flared, :cloudflared_dir, "/from-config")
+      on_exit(fn -> Application.delete_env(:flared, :cloudflared_dir) end)
+
+      assert "/from-config/uuid.json" === Credentials.path("uuid")
     end
   end
 end

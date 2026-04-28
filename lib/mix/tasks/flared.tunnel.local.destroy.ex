@@ -17,7 +17,7 @@ defmodule Mix.Tasks.Flared.Tunnel.Local.Destroy do
   ```bash
   mix flared.tunnel.local.destroy \\
     --tunnel-name test \\
-    --config-dir .cloudflared/test \\
+    --cloudflared-dir .cloudflared/test \\
     --route chat.example.com=http://localhost:4000 \\
     --yes
   ```
@@ -26,7 +26,7 @@ defmodule Mix.Tasks.Flared.Tunnel.Local.Destroy do
 
   - `--account-id <id>`: Cloudflare account id (overrides app config)
   - `--tunnel-name <name>`: tunnel name (required)
-  - `--config-dir <path>`: directory containing the local files (required)
+  - `--cloudflared-dir <path>`: directory containing the local files (required)
   - `--route <hostname>=<service>[,ttl=<n>][,zone_id=<zone_id>]`: repeatable, required
   - `--keep-dns`: do not delete DNS records
   - `--keep-tunnel`: do not delete the tunnel
@@ -44,7 +44,7 @@ defmodule Mix.Tasks.Flared.Tunnel.Local.Destroy do
   @switches [
     account_id: :string,
     tunnel_name: :string,
-    config_dir: :string,
+    cloudflared_dir: :string,
     route: :keep,
     concurrency: :integer,
     dry_run: :boolean,
@@ -118,7 +118,7 @@ defmodule Mix.Tasks.Flared.Tunnel.Local.Destroy do
         opts =
           []
           |> maybe_put(:account_id, parsed[:account_id])
-          |> maybe_put(:config_dir, parsed[:config_dir])
+          |> maybe_put(:cloudflared_dir, parsed[:cloudflared_dir])
           |> Keyword.put(:concurrency, parsed[:concurrency] || System.schedulers_online())
           |> Keyword.put(:dry_run?, parsed[:dry_run] || false)
           |> Keyword.put(:delete_dns?, delete_dns?)

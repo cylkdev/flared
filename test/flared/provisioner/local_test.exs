@@ -8,7 +8,7 @@ defmodule Flared.Provisioner.LocalTest do
       assert {:error, :missing_routes} =
                Local.provision("flare", [],
                  account_id: "x",
-                 config_dir: "/tmp/flared-test",
+                 cloudflared_dir: "/tmp/flared-test",
                  dry_run?: true
                )
     end
@@ -19,7 +19,7 @@ defmodule Flared.Provisioner.LocalTest do
       assert {:error, :missing_routes} =
                Local.deprovision("flare", [],
                  account_id: "x",
-                 config_dir: "/tmp/flared-test",
+                 cloudflared_dir: "/tmp/flared-test",
                  dry_run?: true
                )
     end

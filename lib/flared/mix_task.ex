@@ -1,4 +1,4 @@
-defmodule Flared.TunnelCLI do
+defmodule Flared.MixTask do
   @moduledoc """
   Stateless, high-level API for managing a Cloudflare tunnel via the
   command line.
@@ -34,7 +34,7 @@ defmodule Flared.TunnelCLI do
   ## Example
 
       routes = [%{hostname: "chat.example.com", service: "http://localhost:4000"}]
-      Flared.TunnelCLI.run_remote("site-a", routes)
+      Flared.MixTask.run_remote("site-a", routes)
   """
 
   require Logger
@@ -98,8 +98,8 @@ defmodule Flared.TunnelCLI do
 
   ## Options
 
-    * `:config_dir` — directory for local files (resolved via
-      `Flared.Config.config_dir/1`).
+    * `:cloudflared_dir` — directory for local files (resolved via
+      `Flared.Config.cloudflared_dir/0`).
     * Other options are forwarded to
       `Flared.Provisioner.Local.provision/3`.
   """
@@ -291,7 +291,7 @@ defmodule Flared.TunnelCLI do
 
   ## Options
 
-    * `:config_dir` — directory for local files.
+    * `:cloudflared_dir` — directory for local files.
     * `:timeout` — max ms to keep `cloudflared` running (default
       `:infinity`).
     * `:executable` — overrides `Flared.Config.executable/0`.

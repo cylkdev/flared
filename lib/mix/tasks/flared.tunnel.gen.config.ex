@@ -1,4 +1,4 @@
-defmodule Mix.Tasks.Flared.Tunnel.Config.Gen do
+defmodule Mix.Tasks.Flared.Tunnel.Gen.Config do
   @shortdoc "Generate a cloudflared config for token-based runs"
 
   @moduledoc """
@@ -37,7 +37,7 @@ defmodule Mix.Tasks.Flared.Tunnel.Config.Gen do
   ### Examples
 
   ```bash
-  mix flared.tunnel.config.gen \\
+  mix flared.tunnel.gen.config \\
     --tunnel-id tunnel-id \\
     --route chat.example.com=http://localhost:4000 \\
     --dest .cloudflared
@@ -110,7 +110,7 @@ defmodule Mix.Tasks.Flared.Tunnel.Config.Gen do
       |> maybe_put(:filename, parsed[:filename])
       |> maybe_put(:overwrite?, overwrite?)
 
-    ConfigYML.generate(dest_dir, routes, tunnel_id, opts)
+    ConfigYML.generate_config_yml(dest_dir, routes, tunnel_id, nil, opts)
   end
 
   defp print_run_command(output_path) do

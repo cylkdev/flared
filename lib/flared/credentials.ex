@@ -6,8 +6,8 @@ defmodule Flared.Credentials do
   The Cloudflare API returns a connector *token*: a base64-encoded JSON
   object of the shape `%{"a" => account_tag, "t" => tunnel_uuid, "s" =>
   tunnel_secret}`. The `cloudflared` binary, when launched without
-  `--token`, reads a credentials file at `<config_dir>/<tunnel_id>.json`
-  with a different shape:
+  `--token`, reads a credentials file at
+  `<cloudflared_dir>/<tunnel_id>.json` with a different shape:
 
       {
         "AccountTag":   "<account_tag>",
@@ -17,11 +17,25 @@ defmodule Flared.Credentials do
       }
 
   This module decodes the token and writes the file.
+
+  ## Resolving `cloudflared_dir`
+
+  `write/4` and `path/2` resolve the destination directory in this order:
+
+    1. `:cloudflared_dir` option, when given.
+    2. `Flared.Config.cloudflared_dir/0`.
+    3. The module-level default `#{inspect(".cloudflared")}`.
   """
+
+  alias Flared.Config
+
+  @default_cloudflared_dir ".cloudflared"
 
   @type credentials :: %{
           required(String.t()) => String.t()
         }
+
+  @type opt :: {:cloudflared_dir, Path.t()}
 
   @doc """
   Decodes a cloudflared connector token into the credentials map that
@@ -49,23 +63,31 @@ defmodule Flared.Credentials do
   end
 
   @doc """
-  Writes the credentials JSON for `token` to `<config_dir>/<tunnel_id>.json`.
+  Writes the credentials JSON for `token` to
+  `<cloudflared_dir>/<tunnel_id>.json`.
 
-  Creates `config_dir` if it does not exist. Returns `{:ok, path}` on
+  Creates the directory if it does not exist. Returns `{:ok, path}` on
   success or `{:error, reason}` if the token cannot be decoded or the
   file cannot be written.
+
+  ## Options
+
+    * `:cloudflared_dir` — directory to write into. See module docs for
+      the resolution order when omitted.
   """
   @spec write(
-          config_dir :: Path.t(),
           tunnel_id :: String.t(),
           name :: String.t(),
-          token :: String.t()
+          token :: String.t(),
+          opts :: [opt()]
         ) :: {:ok, Path.t()} | {:error, term()}
-  def write(config_dir, tunnel_id, name, token)
-      when is_binary(config_dir) and is_binary(tunnel_id) and tunnel_id !== "" do
+  def write(tunnel_id, name, token, opts \\ [])
+      when is_binary(tunnel_id) and tunnel_id !== "" and is_list(opts) do
+    cloudflared_dir = resolve_cloudflared_dir(opts)
+
     with {:ok, credentials} <- from_token(token, name),
-         path = Path.join(config_dir, "#{tunnel_id}.json"),
-         :ok <- File.mkdir_p(config_dir),
+         path = Path.join(cloudflared_dir, "#{tunnel_id}.json"),
+         :ok <- File.mkdir_p(cloudflared_dir),
          {:ok, encoded} <- Jason.encode(credentials, pretty: true),
          :ok <- File.write(path, encoded) do
       {:ok, path}
@@ -74,11 +96,22 @@ defmodule Flared.Credentials do
 
   @doc """
   Returns the path the credentials file would be written to for
-  `tunnel_id` under `config_dir`, without touching the filesystem.
+  `tunnel_id`, without touching the filesystem.
+
+  ## Options
+
+    * `:cloudflared_dir` — directory to resolve against. See module
+      docs for the resolution order when omitted.
   """
-  @spec path(config_dir :: Path.t(), tunnel_id :: String.t()) :: Path.t()
-  def path(config_dir, tunnel_id) when is_binary(config_dir) and is_binary(tunnel_id) do
-    Path.join(config_dir, "#{tunnel_id}.json")
+  @spec path(tunnel_id :: String.t(), opts :: [opt()]) :: Path.t()
+  def path(tunnel_id, opts \\ []) when is_binary(tunnel_id) and is_list(opts) do
+    opts
+    |> resolve_cloudflared_dir()
+    |> Path.join("#{tunnel_id}.json")
+  end
+
+  defp resolve_cloudflared_dir(opts) do
+    opts[:cloudflared_dir] || Config.cloudflared_dir() || @default_cloudflared_dir
   end
 
   defp decode_base64(token) do

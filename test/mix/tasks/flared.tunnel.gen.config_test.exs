@@ -1,4 +1,4 @@
-defmodule Mix.Tasks.Flared.Tunnel.Config.GenTest do
+defmodule Mix.Tasks.Flared.Tunnel.Gen.ConfigTest do
   use ExUnit.Case, async: false
 
   defp tmp_dir do
@@ -21,7 +21,7 @@ defmodule Mix.Tasks.Flared.Tunnel.Config.GenTest do
     dest_dir = tmp_dir()
 
     {:ok, path} =
-      Mix.Tasks.Flared.Tunnel.Config.Gen.run([
+      Mix.Tasks.Flared.Tunnel.Gen.Config.run([
         "--tunnel-id",
         "tunnel-id",
         "--route",

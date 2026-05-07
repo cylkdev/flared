@@ -25,4 +25,17 @@ flare-*.tar
 # Temporary files, for example, from tests.
 /tmp/
 
+# Application temporary files
+/priv/tmp/
+
 *.secrets.exs
+AGENTS.md
+
+dialyzer/
+*.plt
+*.plt.*
+*.env
+.env.*
+.cloudflared/
+.elixir-ls/
+.claude/

@@ -87,10 +87,19 @@ defmodule Flared.ProxyTest do
   end
 
   test "child_spec/1 (keyword form) sets id, start args, and defaults restart/shutdown/type" do
-    spec = Flared.Proxy.child_spec(endpoint: EndpointStub, host: "chat.example.com", secret_key_base: "secret")
+    spec =
+      Flared.Proxy.child_spec(
+        endpoint: EndpointStub,
+        host: "chat.example.com",
+        secret_key_base: "secret"
+      )
 
     assert spec.id == {Flared.Proxy, EndpointStub}
-    assert spec.start == {Flared.Proxy, :start_link, [EndpointStub, [host: "chat.example.com", secret_key_base: "secret"]]}
+
+    assert spec.start ==
+             {Flared.Proxy, :start_link,
+              [EndpointStub, [host: "chat.example.com", secret_key_base: "secret"]]}
+
     assert spec.restart == :permanent
     assert spec.shutdown == 5_000
     assert spec.type == :supervisor
@@ -99,11 +108,16 @@ defmodule Flared.ProxyTest do
   test "child_spec/1 (tuple form) supports restart/shutdown overrides" do
     spec =
       Flared.Proxy.child_spec(
-        {EndpointStub, [host: "chat.example.com", secret_key_base: "secret", restart: :transient, shutdown: 10_000]}
+        {EndpointStub,
+         [
+           host: "chat.example.com",
+           secret_key_base: "secret",
+           restart: :transient,
+           shutdown: 10_000
+         ]}
       )
 
     assert spec.restart == :transient
     assert spec.shutdown == 10_000
   end
 end
-

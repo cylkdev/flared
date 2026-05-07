@@ -1,14 +1,12 @@
-defmodule Mix.Tasks.Flared.Deprovision do
-  @shortdoc "Deprovision Cloudflare Tunnel resources (stateless) via the Cloudflare API"
+defmodule Mix.Tasks.Flared.Tunnel.Local.Destroy do
+  @shortdoc "Destroy a local-mode Cloudflare tunnel and clean up its config files"
 
   @moduledoc """
-  Deprovisions (deletes) Cloudflare Tunnel resources created/managed by this project.
+  Destroys (deletes) Cloudflare tunnel + DNS resources for a
+  local-mode tunnel and removes the local `config.yml` and `<UUID>.json`
+  credentials files written by `mix flared.tunnel.local.create`.
 
-  This task is intentionally conservative:
-
-  - DNS records are only deleted when they match the tunnel target
-    (`<tunnel_uuid>.cfargotunnel.com`).
-  - If the tunnel can't be found by name, DNS deletion is skipped (no tunnel id to verify).
+  This is the **local** counterpart to `mix flared.tunnel.remote.destroy`.
 
   ## Safety
 
@@ -17,39 +15,44 @@ defmodule Mix.Tasks.Flared.Deprovision do
   ## Usage
 
   ```bash
-  mix flared.deprovision \
-    --tunnel-name test \
-    --route chat.example.com=http://localhost:4000 \
+  mix flared.tunnel.local.destroy \\
+    --tunnel-name test \\
+    --cloudflared-dir .cloudflared/test \\
+    --route chat.example.com=http://localhost:4000 \\
     --yes
   ```
 
   ## Flags
 
   - `--account-id <id>`: Cloudflare account id (overrides app config)
-  - `--tunnel-name <name>`: tunnel name (overrides app config)
+  - `--tunnel-name <name>`: tunnel name (required)
+  - `--cloudflared-dir <path>`: directory containing the local files (required)
   - `--route <hostname>=<service>[,ttl=<n>][,zone_id=<zone_id>]`: repeatable, required
   - `--keep-dns`: do not delete DNS records
   - `--keep-tunnel`: do not delete the tunnel
+  - `--keep-files`: do not delete the local files
   - `--concurrency <n>`: DNS delete concurrency (default: schedulers_online)
-  - `--dry-run`: print planned changes; do not call mutation endpoints
+  - `--dry-run`: print planned changes; do not call mutation endpoints; do not delete files
   - `--json`: emit a single JSON object
   - `--yes`: required to actually delete
   """
 
   use Mix.Task
 
-  alias Flared.Provisioner
+  alias Flared.Provisioner.{Common, Local}
 
   @switches [
     account_id: :string,
     tunnel_name: :string,
+    cloudflared_dir: :string,
     route: :keep,
     concurrency: :integer,
     dry_run: :boolean,
     json: :boolean,
     yes: :boolean,
     keep_dns: :boolean,
-    keep_tunnel: :boolean
+    keep_tunnel: :boolean,
+    keep_files: :boolean
   ]
 
   @aliases [
@@ -106,19 +109,27 @@ defmodule Mix.Tasks.Flared.Deprovision do
   end
 
   defp do_deprovision(parsed, routes) do
-    delete_dns? = not (parsed[:keep_dns] || false)
-    delete_tunnel? = not (parsed[:keep_tunnel] || false)
+    case parsed[:tunnel_name] do
+      name when is_binary(name) and name !== "" ->
+        delete_dns? = not (parsed[:keep_dns] || false)
+        delete_tunnel? = not (parsed[:keep_tunnel] || false)
+        delete_files? = not (parsed[:keep_files] || false)
 
-    opts =
-      []
-      |> maybe_put(:account_id, parsed[:account_id])
-      |> maybe_put(:tunnel_name, parsed[:tunnel_name])
-      |> Keyword.put(:concurrency, parsed[:concurrency] || System.schedulers_online())
-      |> Keyword.put(:dry_run?, parsed[:dry_run] || false)
-      |> Keyword.put(:delete_dns?, delete_dns?)
-      |> Keyword.put(:delete_tunnel?, delete_tunnel?)
+        opts =
+          []
+          |> maybe_put(:account_id, parsed[:account_id])
+          |> maybe_put(:cloudflared_dir, parsed[:cloudflared_dir])
+          |> Keyword.put(:concurrency, parsed[:concurrency] || System.schedulers_online())
+          |> Keyword.put(:dry_run?, parsed[:dry_run] || false)
+          |> Keyword.put(:delete_dns?, delete_dns?)
+          |> Keyword.put(:delete_tunnel?, delete_tunnel?)
+          |> Keyword.put(:delete_files?, delete_files?)
 
-    Provisioner.deprovision(routes, opts)
+        Local.deprovision(name, routes, opts)
+
+      _ ->
+        {:error, :missing_tunnel_name}
+    end
   end
 
   defp parse_routes([]), do: {:error, :missing_routes}
@@ -126,7 +137,7 @@ defmodule Mix.Tasks.Flared.Deprovision do
   defp parse_routes(routes) do
     routes
     |> Enum.reduce_while({:ok, []}, fn route, {:ok, acc} ->
-      case Provisioner.parse_route(route) do
+      case Common.parse_route(route) do
         {:ok, parsed} -> {:cont, {:ok, [parsed | acc]}}
         {:error, reason} -> {:halt, {:error, reason}}
       end
@@ -145,9 +156,10 @@ defmodule Mix.Tasks.Flared.Deprovision do
           "tunnel_name" => result.tunnel_name,
           "tunnel" => result.tunnel,
           "dry_run?" => result.dry_run?,
-          "dns" => result.dns
+          "dns" => result.dns,
+          "files" => result.files
         }
-        |> Jason.encode!()
+        |> JSON.encode!()
 
       Mix.shell().info(json)
     else
@@ -160,12 +172,14 @@ defmodule Mix.Tasks.Flared.Deprovision do
       Mix.shell().info("Tunnel: #{result.tunnel_name} #{tunnel_id_display}")
 
       Enum.each(result.dns, fn dns ->
-        hostname = dns.hostname
-        status = dns.status
-        Mix.shell().info("DNS: #{hostname} => #{status}")
+        Mix.shell().info("DNS: #{dns.hostname} => #{dns.status}")
       end)
 
       Mix.shell().info("Tunnel delete: #{result.tunnel.status}")
+
+      Enum.each(result.files, fn file ->
+        Mix.shell().info("File: #{file.path} => #{file.status}")
+      end)
 
       if result.dry_run? do
         Mix.shell().info("Dry run: no changes applied")
@@ -179,11 +193,13 @@ defmodule Mix.Tasks.Flared.Deprovision do
 
   defp format_error(:missing_routes), do: "Missing required --route flags"
 
-  defp format_error(:missing_cloudflare_api_token),
-    do: "Missing Cloudflare API token (:cloudflare_api_token)"
+  defp format_error(:missing_tunnel_name), do: "Missing required --tunnel-name"
+
+  defp format_error(:missing_api_token),
+    do: "Missing Cloudflare API token (:api_token)"
 
   defp format_error(:missing_account_id),
-    do: "Missing Cloudflare account id (--account-id or :cloudflare_account_id)"
+    do: "Missing Cloudflare account id (--account-id or :account_id)"
 
   defp format_error({:ambiguous_tunnel_name, tunnel_name, ids}),
     do: "Multiple tunnels match name #{tunnel_name} (matches: #{Enum.join(ids, ", ")})"

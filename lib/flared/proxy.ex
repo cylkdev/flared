@@ -20,12 +20,12 @@ defmodule Flared.Proxy do
   """
 
   @adapter Bandit.PhoenixAdapter
-  @server Mix.env() !== :test
+  @server_enabled false
 
   def start_link(endpoint, options \\ []) do
     options
     |> Keyword.put(:adapter, @adapter)
-    |> Keyword.put(:server, options[:server] || @server)
+    |> Keyword.put(:server, options[:server] || @server_enabled)
     |> put_url_options()
     |> put_http_options()
     |> put_force_ssl_options()

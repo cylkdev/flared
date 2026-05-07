@@ -1,12 +1,13 @@
-defmodule Mix.Tasks.Flared.Provision do
-  @shortdoc "Provision a Cloudflare Tunnel (stateless) via the Cloudflare API"
+defmodule Mix.Tasks.Flared.Tunnel.Remote.Create do
+  @shortdoc "Create a remote-mode Cloudflare tunnel via the Cloudflare API"
 
   @moduledoc """
-  Provisions a Cloudflare Tunnel, ingress rules, and DNS for one or more routes.
+  Creates a Cloudflare tunnel, ingress rules, and DNS for one or more routes.
 
-  This task is **stateless**: it does not write `cloudflared` config files or
-  credentials JSON to disk. It uses the Cloudflare API (via `Req`) to configure
-  the tunnel and DNS, then prints a `cloudflared tunnel run --token ...` command.
+  This is the **remote** counterpart to `mix flared.tunnel.local.create`: it
+  pushes ingress rules to the Cloudflare API and emits a
+  `cloudflared tunnel run --token ...` command. It does not write
+  `cloudflared` config or credentials JSON to disk.
 
   ## Configuration
 
@@ -17,7 +18,7 @@ defmodule Mix.Tasks.Flared.Provision do
   ## Usage
 
   ```bash
-  mix flared.provision \
+  mix flared.tunnel.remote.create \
     --tunnel-name test \
     --route chat.example.com=http://localhost:4000 \
     --route api.example.com=http://localhost:4001
@@ -26,7 +27,7 @@ defmodule Mix.Tasks.Flared.Provision do
   ## Flags
 
   - `--account-id <id>`: Cloudflare account id (overrides app config)
-  - `--tunnel-name <name>`: tunnel name (overrides app config)
+  - `--tunnel-name <name>`: tunnel name (required)
   - `--route <hostname>=<service>[,ttl=<n>][,zone_id=<zone_id>]`: repeatable, required
   - `--concurrency <n>`: DNS upsert concurrency (default: schedulers_online)
   - `--dry-run`: print planned changes; do not call mutation endpoints
@@ -38,7 +39,7 @@ defmodule Mix.Tasks.Flared.Provision do
 
   use Mix.Task
 
-  alias Flared.Provisioner
+  alias Flared.Provisioner.{Common, Remote}
 
   @switches [
     account_id: :string,
@@ -96,14 +97,19 @@ defmodule Mix.Tasks.Flared.Provision do
   end
 
   defp do_provision(parsed, routes) do
-    opts =
-      []
-      |> maybe_put(:account_id, parsed[:account_id])
-      |> maybe_put(:tunnel_name, parsed[:tunnel_name])
-      |> Keyword.put(:concurrency, parsed[:concurrency] || System.schedulers_online())
-      |> Keyword.put(:dry_run?, parsed[:dry_run] || false)
+    case parsed[:tunnel_name] do
+      name when is_binary(name) and name !== "" ->
+        opts =
+          []
+          |> maybe_put(:account_id, parsed[:account_id])
+          |> Keyword.put(:concurrency, parsed[:concurrency] || System.schedulers_online())
+          |> Keyword.put(:dry_run?, parsed[:dry_run] || false)
 
-    Provisioner.provision(routes, opts)
+        Remote.provision(name, routes, opts)
+
+      _ ->
+        {:error, :missing_tunnel_name}
+    end
   end
 
   defp parse_routes([]), do: {:error, :missing_routes}
@@ -111,7 +117,7 @@ defmodule Mix.Tasks.Flared.Provision do
   defp parse_routes(routes) do
     routes
     |> Enum.reduce_while({:ok, []}, fn route, {:ok, acc} ->
-      case Provisioner.parse_route(route) do
+      case Common.parse_route(route) do
         {:ok, parsed} -> {:cont, {:ok, [parsed | acc]}}
         {:error, reason} -> {:halt, {:error, reason}}
       end
@@ -134,7 +140,7 @@ defmodule Mix.Tasks.Flared.Provision do
           "routes" => Enum.map(result.routes, &stringify_route/1),
           "dns" => Enum.map(result.dns, &stringify_dns/1)
         }
-        |> Jason.encode!()
+        |> JSON.encode!()
 
       Mix.shell().info(json)
     else
@@ -192,11 +198,13 @@ defmodule Mix.Tasks.Flared.Provision do
 
   defp format_error(:missing_routes), do: "Missing required --route flags"
 
-  defp format_error(:missing_cloudflare_api_token),
-    do: "Missing Cloudflare API token (:cloudflare_api_token)"
+  defp format_error(:missing_tunnel_name), do: "Missing required --tunnel-name"
+
+  defp format_error(:missing_api_token),
+    do: "Missing Cloudflare API token (:api_token)"
 
   defp format_error(:missing_account_id),
-    do: "Missing Cloudflare account id (--account-id or :cloudflare_account_id)"
+    do: "Missing Cloudflare account id (--account-id or :account_id)"
 
   defp format_error(:zone_not_found), do: "No matching Cloudflare zone found for hostname"
 

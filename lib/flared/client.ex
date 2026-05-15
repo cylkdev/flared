@@ -12,7 +12,7 @@ defmodule Flared.Client do
   Every public function accepts an `opts` keyword list:
 
   - `:token` - Cloudflare User API Token. Falls back to
-    `Flared.Config.api_token/0` when not provided.
+    `Flared.Config.tunnel_api_token/0` when not provided.
   - `:adapter` - `Req` adapter override (test-only).
   - `:params` - query string parameters (GET).
   - any other key supported by `Req.request/2` is forwarded.
@@ -116,7 +116,7 @@ defmodule Flared.Client do
   end
 
   defp build_req(opts) do
-    token = opts[:token] || Config.api_token()
+    token = opts[:tunnel_api_token] || Config.tunnel_api_token()
 
     if is_binary(token) and token != "" do
       base = [
@@ -135,13 +135,13 @@ defmodule Flared.Client do
 
       {:ok, Req.new(base)}
     else
-      {:error, :missing_api_token}
+      {:error, :missing_tunnel_api_token}
     end
   end
 
   defp build_req_opts(method, path, opts) do
     opts
-    |> Keyword.drop([:token, :adapter])
+    |> Keyword.drop([:tunnel_api_token, :adapter])
     |> Keyword.put(:method, method)
     |> Keyword.put(:url, path)
   end

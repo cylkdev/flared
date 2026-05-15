@@ -27,7 +27,7 @@ defmodule Mix.Tasks.Flared.Tunnel.Find do
 
   use Mix.Task
 
-  alias Flared.MixTask
+  alias Flared.Mixin
 
   @switches [
     name: :string,
@@ -57,7 +57,7 @@ defmodule Mix.Tasks.Flared.Tunnel.Find do
     json? = parsed[:json] || false
     opts = build_opts(parsed)
 
-    case MixTask.find(opts) do
+    case Mixin.find(opts) do
       {:ok, entries} ->
         print_entries(entries, json?)
         :ok

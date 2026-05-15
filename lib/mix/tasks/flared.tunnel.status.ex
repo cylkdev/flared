@@ -20,7 +20,7 @@ defmodule Mix.Tasks.Flared.Tunnel.Status do
 
   use Mix.Task
 
-  alias Flared.MixTask
+  alias Flared.Mixin
 
   @switches [
     name: :string,
@@ -58,7 +58,7 @@ defmodule Mix.Tasks.Flared.Tunnel.Status do
   end
 
   defp dispatch_status(name, json?) do
-    case MixTask.status(name) do
+    case Mixin.status(name) do
       {:ok, info} ->
         print_status(info, json?)
         :ok

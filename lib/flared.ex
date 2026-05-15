@@ -2,7 +2,7 @@ defmodule Flared do
   @moduledoc """
   Flared provisions Cloudflare tunnels from Elixir.
 
-  This module is a docs hub. The public API lives in `Flared.MixTask`.
+  This module is a docs hub. The public API lives in `Flared.Mixin`.
 
   ## Two ways to run a tunnel
 
@@ -36,28 +36,28 @@ defmodule Flared do
         %{hostname: "api.example.com",  service: "http://localhost:4001"}
       ]
 
-      Flared.MixTask.run_remote("site-a", routes)
+      Flared.Mixin.run_remote("site-a", routes)
 
   Or, to run with a local `config.yml`:
 
-      Flared.MixTask.run_local("site-a", routes, cloudflared_dir: ".cloudflared/site-a")
+      Flared.Mixin.run_local("site-a", routes, cloudflared_dir: ".cloudflared/site-a")
 
   Both block until `cloudflared` exits, then deprovision the
   Cloudflare-side resources before returning.
 
   ### 3. Inspect a tunnel
 
-      Flared.MixTask.status("site-a")
+      Flared.Mixin.status("site-a")
       #=> {:ok, %{name: "site-a", exists: true, tunnel_id: "..."}}
 
   The tunnel `name` is a required first positional argument on every
-  `Flared.MixTask` function.
+  `Flared.Mixin` function.
 
   ## What lives where
 
   | Module                      | Purpose                                          |
   | --------------------------- | ------------------------------------------------ |
-  | `Flared.MixTask`             | Stateless high-level tunnel API.                 |
+  | `Flared.Mixin`             | Stateless high-level tunnel API.                 |
   | `Flared.Provisioner.Remote` | API-managed (token mode) provisioning.           |
   | `Flared.Provisioner.Local`  | Local-config provisioning + on-disk artifacts.   |
   | `Flared.Credentials`        | Builds the `<UUID>.json` credentials file.       |

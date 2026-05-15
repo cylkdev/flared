@@ -3,7 +3,7 @@ defmodule Mix.Tasks.Flared.Tunnel.Local.Run do
 
   @moduledoc """
   Runs a local-mode Cloudflare tunnel by calling
-  `Flared.MixTask.run_local/2` and blocks the BEAM until `cloudflared`
+  `Flared.Mixin.run_local/2` and blocks the BEAM until `cloudflared`
   exits.
 
   Creates resources via `Flared.Provisioner.Local.provision/3`,
@@ -44,7 +44,7 @@ defmodule Mix.Tasks.Flared.Tunnel.Local.Run do
   use Mix.Task
 
   alias Flared.Provisioner.Common
-  alias Flared.MixTask
+  alias Flared.Mixin
 
   @switches [
     name: :string,
@@ -101,7 +101,7 @@ defmodule Mix.Tasks.Flared.Tunnel.Local.Run do
     Mix.shell().info("Tunnel #{inspect(name)} starting…")
     Mix.shell().info("Press Ctrl-C twice to stop.")
 
-    case MixTask.run_local(name, parsed_routes, opts) do
+    case Mixin.run_local(name, parsed_routes, opts) do
       :ok ->
         :ok
 

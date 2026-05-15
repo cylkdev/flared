@@ -23,7 +23,7 @@ defmodule Mix.Tasks.Flared.Tunnel.List do
 
   use Mix.Task
 
-  alias Flared.MixTask
+  alias Flared.Mixin
 
   @switches [
     account_id: :string,
@@ -51,7 +51,7 @@ defmodule Mix.Tasks.Flared.Tunnel.List do
     json? = parsed[:json] || false
     opts = build_opts(parsed)
 
-    case MixTask.list(opts) do
+    case Mixin.list(opts) do
       {:ok, entries} ->
         print_entries(entries, json?)
         :ok

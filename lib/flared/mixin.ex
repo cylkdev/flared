@@ -1,4 +1,4 @@
-defmodule Flared.MixTask do
+defmodule Flared.Mixin do
   @moduledoc """
   Stateless, high-level API for managing a Cloudflare tunnel via the
   command line.
@@ -34,7 +34,7 @@ defmodule Flared.MixTask do
   ## Example
 
       routes = [%{hostname: "chat.example.com", service: "http://localhost:4000"}]
-      Flared.MixTask.run_remote("site-a", routes)
+      Flared.Mixin.run_remote("site-a", routes)
   """
 
   require Logger

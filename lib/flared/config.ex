@@ -6,7 +6,7 @@ defmodule Flared.Config do
   If you want to source values from OS environment variables, do it in your
   config environment (typically `config/runtime.exs`).
 
-  `:api_token` must be a **User API Token** created under
+  `:tunnel_api_token` must be a **User API Token** created under
   **My Profile → API Tokens**
   (https://dash.cloudflare.com/profile/api-tokens). Account-owned API
   Tokens (created under *Manage Account → Account API Tokens*) and the
@@ -17,7 +17,7 @@ defmodule Flared.Config do
 
   ```elixir
   config :flared,
-    api_token: System.get_env("CLOUDFLARE_API_TOKEN"),
+    tunnel_api_token: System.get_env("CLOUDFLARE_TUNNEL_API_TOKEN"),
     account_id: System.get_env("CLOUDFLARE_ACCOUNT_ID"),
     dns: %{ttl: 1}
   ```
@@ -26,9 +26,9 @@ defmodule Flared.Config do
   @app :flared
   @default_cloudflared_dir ".cloudflared"
 
-  @spec api_token() :: String.t() | nil
-  def api_token do
-    @app |> Application.get_env(:api_token) |> lookup(nil)
+  @spec tunnel_api_token() :: String.t() | nil
+  def tunnel_api_token do
+    @app |> Application.get_env(:tunnel_api_token) |> lookup(nil)
   end
 
   @spec account_id() :: String.t() | nil
